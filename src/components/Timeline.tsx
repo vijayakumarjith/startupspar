@@ -30,7 +30,7 @@ const Timeline = () => {
       description: 'Ticket to Phase 1',
     },
     {
-      date: '13th march - 2nd march',
+      date: '13th march - 2nd April',
       title: 'Phase 2',
       description: 'i know its product',
     },
