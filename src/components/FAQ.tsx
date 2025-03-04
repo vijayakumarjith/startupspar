@@ -13,7 +13,7 @@ const FAQ = () => {
 
   const faqs = [
     {
-      question: "Who can participate in STARTUP SPARK 2024-2025?",
+      question: "Who can participate in STARTUP SPARK 2025?",
       answer: "The challenge is open to students and young entrepreneurs with innovative startup ideas. Teams should consist of 2-4 members."
     },
     {
@@ -30,7 +30,7 @@ const FAQ = () => {
     },
     {
       question: "Is there a registration fee?",
-      answer: "Registration fee details will be shared with teams selected for Phase 1 via email."
+      answer: "Registration fee details once signin there payment can be done"
     }
   ];
 
