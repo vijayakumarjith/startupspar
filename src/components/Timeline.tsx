@@ -10,47 +10,33 @@ const Timeline = () => {
 
   const timelineEvents = [
     {
-      date: '28 Dec 2024 - 29 jan 2025',
-      title: 'Prelims',
+      date: 'March 4 - March 10',
+      title: 'Phase - 1',
       description: 'Begin your journey ',
     },
     {
-      date: 'TBH',
-      title: 'Result of prelims',
-      description: 'Entry of Founder plan',
+      date: '10 March',
+      title: 'Workshop Online',
+      description: 'World how startup tells',
     },
     {
-      date: '7 Feb 2025 - 5 March 2025',
-      title: 'Phase - 1',
-      description: 'Pitching video and ppt submission',
-    },
-    {
-      date: 'TBH',
-      title: 'Result of Phase 1',
+      date: '12th March',
+      title: 'Offline workshop',
       description: 'ticket to entry for phase 2',
     },
     {
-      date: '10 March 2025 - 3 April 2025',
+      date: '13th march',
+      title: 'result Phase 1',
+      description: 'Ticket to Phase 1',
+    },
+    {
+      date: '13th march - 2nd march',
       title: 'Phase 2',
-      description: 'Proposal and final product vedio submission',
+      description: 'i know its product',
     },
+
     {
-      date: 'TBH',
-      title: 'Results of Phase 2',
-      description: 'Ticket to Entry Finale',
-    },
-    {
-      date: 'TBH',
-      title: 'Workshop 1',
-      description: 'Online',
-    },
-    {
-      date: 'TBH',
-      title: 'Workshop 2',
-      description: 'Offline',
-    },
-    {
-      date: 'TBH',
+      date: '4th April',
       title: 'Grand finale',
       description: 'Offline',
     },
