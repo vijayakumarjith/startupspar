@@ -21,7 +21,7 @@ const RegistrationInstructions = () => {
     },
     {
       icon: <FileCheck className="w-6 h-6" />,
-      text: 'Complete all preliminary requirements before registration',
+      text: 'Complete all phase 1 requirements before registration',
     },
   ];
 
@@ -35,24 +35,24 @@ const RegistrationInstructions = () => {
       >
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold gradient-text mb-6">
-            Prelims instruction
+            Phase 1 Instructions
           </h2>
           <p className="text-gray-300 text-lg max-w-3xl mx-auto">
             In this section you will get the instructions for registration
           </p>
         </div>
 
-        {/* Prelims Information */}
+        {/* Phase 1 Information */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 backdrop-blur-lg rounded-xl p-8 mb-12"
         >
           <h3 className="text-2xl font-bold text-white mb-4">
-            Prelims registeration
+            Phase 1 Registration
           </h3>
           <p className="text-gray-300 mb-6">
-            Click the link below to register for your preliminary round. Make
+            Click the link below to sign in and register for phase 1. Make
             sure to review all rules and requirements before proceeding.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
