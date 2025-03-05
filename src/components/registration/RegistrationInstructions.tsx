@@ -58,7 +58,7 @@ const RegistrationInstructions = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <RegistrationButtons />
             <motion.a
-              href="https://docs.google.com/presentation/d/1xyz123/edit?usp=sharing"
+              href="https://docs.google.com/presentation/d/1xTl0W_sa2uf7QMBwoCCPji2dmOJxClD-40S0y_4bkmQ/edit?usp=sharing"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-full text-lg hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300"
