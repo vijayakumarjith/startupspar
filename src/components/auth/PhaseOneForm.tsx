@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Youtube, FileText, Send, Download, User, School, Phone, AlertCircle } from 'lucide-react';
+import { Upload, Youtube, FileText, Send, Download, User, School, Phone, AlertCircle, Info, Clock, Video, Volume2, CheckSquare } from 'lucide-react';
 import { collection, addDoc, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../lib/firebase';
@@ -42,6 +42,7 @@ const PhaseOneForm: React.FC<PhaseOneFormProps> = ({ userId, userName, isAdmin =
   const [registrationId, setRegistrationId] = useState('');
   const [error, setError] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending');
+  const [showGuidelines, setShowGuidelines] = useState(false);
 
   useEffect(() => {
     if (isAdmin) {
@@ -67,7 +68,6 @@ const PhaseOneForm: React.FC<PhaseOneFormProps> = ({ userId, userName, isAdmin =
           setRegistrationId(data.registrationId);
         }
         
-        // Check for "paid" status (lowercase)
         setPaymentStatus(data.paymentStatus === 'paid' ? 'paid' : 'pending');
       }
     } catch (error) {
@@ -158,6 +158,29 @@ const PhaseOneForm: React.FC<PhaseOneFormProps> = ({ userId, userName, isAdmin =
     } finally {
       setLoading(false);
     }
+  };
+
+  const videoGuidelines = {
+    requirements: [
+      { icon: <Clock className="w-4 h-4" />, text: "Duration: Strictly 3 minutes or shorter" },
+      { icon: <Video className="w-4 h-4" />, text: "Title Format: StartupSpark 2025 Grand Challenge - [Your Team Name]" },
+      { icon: <Volume2 className="w-4 h-4" />, text: "No automated voiceovers - Team members must present" },
+      { icon: <CheckSquare className="w-4 h-4" />, text: "Record in a quiet location with clear audio" }
+    ],
+    content: [
+      "Introduction: Team members, institution name, and startup name (≤ 15 sec)",
+      "Problem & Market Opportunity (≈45 sec)",
+      "Solution & Business Model (≈45 sec)",
+      "Prototype Demonstration (≈1–1.5 min)",
+      "Scalability & Future Potential (≈30 sec)"
+    ],
+    evaluation: [
+      "Problem Statement & Market Need (20%)",
+      "Innovation & Unique Value Proposition (25%)",
+      "Prototype Feasibility & Functionality (25%)",
+      "Business Model & Market Potential (20%)",
+      "Presentation & Communication (10%)"
+    ]
   };
 
   if (isAdmin) {
@@ -446,24 +469,97 @@ const PhaseOneForm: React.FC<PhaseOneFormProps> = ({ userId, userName, isAdmin =
                   </div>
                 </div>
 
-                <div className="bg-blue-900/20 p-4 rounded-lg">
-                  <h3 className="text-base sm:text-lg font-semibold text-white mb-3">Video Guidelines</h3>
-                  <ul className="space-y-2 text-gray-300 text-xs sm:text-sm">
-                    <li>• Maximum duration: 5 minutes</li>
-                    <li>• Include product demo</li>
-                    <li>• Highlight key features</li>
-                    <li>• Explain market potential</li>
+                <div className="bg-purple-900/20 p-4 rounded-lg mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-white">Video Guidelines</h3>
+                    <button
+                      onClick={() => setShowGuidelines(true)}
+                      className="text-purple-400 hover:text-purple-300 flex items-center"
+                    >
+                      <Info className="w-4 h-4 mr-1" />
+                      View Full Guidelines
+                    </button>
+                  </div>
+                  <ul className="space-y-2 text-gray-300 text-sm">
+                    {videoGuidelines.requirements.map((req, index) => (
+                      <li key={index} className="flex items-center">
+                        {req.icon}
+                        <span className="ml-2">{req.text}</span>
+                      </li>
+                    ))}
                   </ul>
-                  <motion.a
-                    href="/guidelines.pdf"
-                    download
-                    className="inline-flex items-center mt-4 text-blue-400 hover:text-blue-300 text-xs sm:text-sm"
-                    whileHover={{ x: 5 }}
-                  >
-                    <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
-                    Download detailed guidelines
-                  </motion.a>
                 </div>
+
+                {showGuidelines && (
+                  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 backdrop-blur-xl rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                    >
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-2xl font-bold text-white">Video Submission Guidelines</h3>
+                        <button
+                          onClick={() => setShowGuidelines(false)}
+                          className="text-gray-400 hover:text-white"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <div className="space-y-6">
+                        <div>
+                          <h4 className="text-xl font-semibold text-purple-400 mb-4">Video Requirements</h4>
+                          <ul className="space-y-3 text-gray-300">
+                            {videoGuidelines.requirements.map((req, index) => (
+                              <li key={index} className="flex items-center">
+                                {req.icon}
+                                <span className="ml-2">{req.text}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h4 className="text-xl font-semibold text-purple-400 mb-4">Content Structure</h4>
+                          <ul className="space-y-3 text-gray-300">
+                            {videoGuidelines.content.map((content, index) => (
+                              <li key={index} className="flex items-start">
+                                <span className="bg-purple-500/20 rounded-full w-6 h-6 flex items-center justify-center text-purple-400 mr-2 flex-shrink-0">
+                                  {index + 1}
+                                </span>
+                                {content}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h4 className="text-xl font-semibold text-purple-400 mb-4">Evaluation Criteria</h4>
+                          <ul className="space-y-3 text-gray-300">
+                            {videoGuidelines.evaluation.map((criterion, index) => (
+                              <li key={index} className="flex items-center">
+                                <CheckSquare className="w-4 h-4 text-purple-400 mr-2" />
+                                {criterion}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="bg-blue-900/20 p-4 rounded-lg">
+                          <h4 className="text-lg font-semibold text-white mb-3">Important Notes</h4>
+                          <ul className="space-y-2 text-gray-300 text-sm">
+                            <li>• Set video status as "Unlisted" on YouTube</li>
+                            <li>• Include project description (≤ 200 words) in YouTube description</li>
+                            <li>• Add required hashtags: #grandchallenge #startupspark2025 #recchennai</li>
+                            <li>• Ensure high-quality audio and visuals</li>
+                            <li>• Submit before the deadline</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
 
                 <div className="bg-purple-900/20 p-4 rounded-lg">
                   <h3 className="text-base sm:text-lg font-semibold text-white mb-3">Registration ID</h3>
