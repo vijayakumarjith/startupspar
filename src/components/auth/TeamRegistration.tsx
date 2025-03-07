@@ -23,7 +23,7 @@ interface TeamRegistrationProps {
 }
 
 const REGISTRATION_DEADLINE = new Date('2025-03-09T23:59:59').getTime();
-const COST_PER_MEMBER = 250;
+const COST_PER_MEMBER = 200;
 const PAYMENT_PORTAL_URL = 'http://82.29.167.185:3000/';
 
 interface TeamMember {
