@@ -14,13 +14,18 @@ import {
   ArrowDownRight,
   BarChart3,
   PieChart,
+  Mail,
+  Phone,
+  User,
+  School,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 
 const FinanceDashboard: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
@@ -28,6 +33,10 @@ const FinanceDashboard: React.FC = () => {
   const [paidTeams, setPaidTeams] = useState(0);
   const [pendingTeams, setPendingTeams] = useState(0);
   const [averagePayment, setAveragePayment] = useState(0);
+  const [totalRegistrations, setTotalRegistrations] = useState(0);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -35,25 +44,72 @@ const FinanceDashboard: React.FC = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    setError('');
     try {
-      // Fetch payments
-      const paymentsSnapshot = await getDocs(collection(db, 'payments'));
+      // Fetch users
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUsers(usersData);
+      setTotalRegistrations(usersData.length);
+
+      // First, get all teams to build a map of team emails
+      const teamsSnapshot = await getDocs(collection(db, 'teams'));
+      const teamEmailMap = new Map();
+      const teamsData: any[] = [];
+      teamsSnapshot.forEach((doc) => {
+        const teamData = { id: doc.id, ...doc.data() };
+        teamsData.push(teamData);
+        if (teamData.members) {
+          teamData.members.forEach((member: any) => {
+            if (member.email) {
+              teamEmailMap.set(member.email.toLowerCase(), doc.id);
+            }
+          });
+        }
+      });
+      setTeams(teamsData);
+
+      // Fetch all paid payments
+      const paymentsQuery = query(collection(db, 'payments'), where('status', '==', 'paid'));
+      const paymentsSnapshot = await getDocs(paymentsQuery);
       let paymentsData: any[] = [];
       let total = 0;
-      let count = 0;
+      const paidEmailSet = new Set();
       
       paymentsSnapshot.forEach((doc) => {
         const paymentData = { id: doc.id, ...doc.data() };
         paymentsData.push(paymentData);
         
-        // Calculate total for paid payments
-        if (paymentData.status === 'paid' && paymentData.amount) {
+        if (paymentData.email) {
+          paidEmailSet.add(paymentData.email.toLowerCase());
+        }
+        
+        if (paymentData.amount) {
           total += parseFloat(paymentData.amount);
-          count++;
+        }
+      });
+
+      // Count paid teams based on email matches
+      let paidTeamsCount = 0;
+      let pendingTeamsCount = 0;
+      const processedTeams = new Set();
+
+      paidEmailSet.forEach((email: string) => {
+        const teamId = teamEmailMap.get(email);
+        if (teamId && !processedTeams.has(teamId)) {
+          paidTeamsCount++;
+          processedTeams.add(teamId);
+        }
+      });
+
+      // Count remaining teams as pending
+      teamEmailMap.forEach((teamId) => {
+        if (!processedTeams.has(teamId)) {
+          pendingTeamsCount++;
         }
       });
       
-      // Apply date filter
+      // Apply date filter if active
       if (dateFilter !== 'all') {
         const now = new Date();
         let filterDate = new Date();
@@ -84,76 +140,146 @@ const FinanceDashboard: React.FC = () => {
       
       setPayments(paymentsData);
       setTotalRevenue(total);
-      setAveragePayment(count > 0 ? total / count : 0);
-      
-      // Fetch teams
-      const teamsSnapshot = await getDocs(collection(db, 'teams'));
-      const teamsData: any[] = [];
-      let paidCount = 0;
-      let pendingCount = 0;
-      
-      teamsSnapshot.forEach((doc) => {
-        const teamData = { id: doc.id, ...doc.data() };
-        teamsData.push(teamData);
-        
-        if (teamData.paymentStatus === 'paid') {
-          paidCount++;
-        } else {
-          pendingCount++;
-        }
-      });
-      
-      setTeams(teamsData);
-      setPaidTeams(paidCount);
-      setPendingTeams(pendingCount);
+      setAveragePayment(paidTeamsCount > 0 ? total / paidTeamsCount : 0);
+      setPaidTeams(paidTeamsCount);
+      setPendingTeams(pendingTeamsCount);
       
     } catch (error) {
       console.error('Error fetching data:', error);
+      setError('Failed to fetch data. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const exportPaymentsToCSV = () => {
-    if (payments.length === 0) return;
-    
-    // Create CSV content
-    const headers = ['Date', 'Name', 'Email', 'Amount', 'Status', 'Payment ID'];
-    const csvRows = [headers.join(',')];
-    
-    payments.forEach(payment => {
-      const row = [
-        payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : 'N/A',
-        payment.buyerName || 'N/A',
-        payment.email || 'N/A',
-        payment.amount || '0',
-        payment.status || 'N/A',
-        payment.payment_id || 'N/A'
-      ];
+  const markTeamAsPaid = async (teamId: string) => {
+    try {
+      setLoading(true);
+      setError('');
       
-      // Escape any commas in the data
-      const escapedRow = row.map(field => {
-        if (field.includes(',')) {
-          return `"${field}"`;
-        }
-        return field;
+      // Update team document
+      const teamRef = doc(db, 'teams', teamId);
+      await updateDoc(teamRef, {
+        paymentStatus: 'paid',
+        paymentCompletedAt: new Date().toISOString()
       });
+
+      // Show success message
+      setSuccess('Team payment status updated successfully!');
       
-      csvRows.push(escapedRow.join(','));
-    });
-    
-    const csvContent = csvRows.join('\n');
-    
-    // Create and download the CSV file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      // Refresh data
+      await fetchData();
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      setError('Failed to update payment status. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sanitizeCSVField = (field: any): string => {
+    if (field === null || field === undefined) return 'N/A';
+    const stringField = String(field);
+    return stringField.includes(',') ? `"${stringField}"` : stringField;
+  };
+
+  const downloadCSV = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `payments_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPaymentsToCSV = async () => {
+    if (exporting) return;
+    
+    try {
+      setExporting(true);
+      setError('');
+      
+      if (!payments.length) {
+        throw new Error('No payment records to export');
+      }
+
+      const headers = ['Date', 'Name', 'Email', 'Amount', 'Status', 'Payment ID'];
+      const csvRows = [headers.join(',')];
+      
+      payments.forEach(payment => {
+        const row = [
+          payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : 'N/A',
+          sanitizeCSVField(payment.buyerName),
+          sanitizeCSVField(payment.email),
+          sanitizeCSVField(payment.amount),
+          sanitizeCSVField(payment.status),
+          sanitizeCSVField(payment.payment_id)
+        ];
+        
+        csvRows.push(row.join(','));
+      });
+      
+      const csvContent = csvRows.join('\n');
+      const timestamp = new Date().toISOString().split('T')[0];
+      downloadCSV(csvContent, `payments_export_${timestamp}.csv`);
+      
+    } catch (error: any) {
+      console.error('Error exporting payments CSV:', error);
+      setError(error.message || 'Failed to export payments. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportTeamsToCSV = async () => {
+    if (exporting) return;
+    
+    try {
+      setExporting(true);
+      setError('');
+      
+      if (!teams.length) {
+        throw new Error('No team records to export');
+      }
+      
+      const headers = ['Team Name', 'Registration ID', 'Team Size', 'Members', 'Payment Status', 'Created At'];
+      const csvRows = [headers.join(',')];
+      
+      teams.forEach(team => {
+        const membersInfo = team.members?.map((m: any) => 
+          `${sanitizeCSVField(m.name)}(${sanitizeCSVField(m.email)})`
+        ).join('; ') || 'N/A';
+        
+        const row = [
+          sanitizeCSVField(team.teamName),
+          sanitizeCSVField(team.registrationId),
+          sanitizeCSVField(team.teamSize),
+          sanitizeCSVField(membersInfo),
+          sanitizeCSVField(team.paymentStatus || 'pending'),
+          team.createdAt ? new Date(team.createdAt).toLocaleDateString() : 'N/A'
+        ];
+        
+        csvRows.push(row.join(','));
+      });
+      
+      const csvContent = csvRows.join('\n');
+      const timestamp = new Date().toISOString().split('T')[0];
+      downloadCSV(csvContent, `teams_export_${timestamp}.csv`);
+      
+    } catch (error: any) {
+      console.error('Error exporting teams CSV:', error);
+      setError(error.message || 'Failed to export teams. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -167,6 +293,26 @@ const FinanceDashboard: React.FC = () => {
             Track payments and manage financial records
           </p>
         </div>
+
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-red-500/10 text-red-400 rounded-lg"
+          >
+            {error}
+          </motion.div>
+        )}
+
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-green-500/10 text-green-400 rounded-lg"
+          >
+            {success}
+          </motion.div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -199,8 +345,8 @@ const FinanceDashboard: React.FC = () => {
           >
             <div className="flex justify-between items-start mb-4">
               <div>
-                <p className="text-gray-400 text-sm">Registered Teams</p>
-                <h3 className="text-2xl font-bold text-blue-400">{teams.length}</h3>
+                <p className="text-gray-400 text-sm">Total Registrations</p>
+                <h3 className="text-2xl font-bold text-blue-400">{totalRegistrations}</h3>
               </div>
               <div className="bg-blue-500/20 p-2 rounded-lg">
                 <Users className="w-6 h-6 text-blue-400" />
@@ -208,7 +354,7 @@ const FinanceDashboard: React.FC = () => {
             </div>
             <div className="flex items-center text-xs text-blue-400">
               <TrendingUp className="w-3 h-3 mr-1" />
-              <span>{paidTeams + pendingTeams} total registrations</span>
+              <span>{teams.length} teams formed</span>
             </div>
           </motion.div>
 
@@ -311,127 +457,112 @@ const FinanceDashboard: React.FC = () => {
             </button>
           </div>
           
-          <motion.button
-            onClick={exportPaymentsToCSV}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="px-4 py-2 bg-blue-600 rounded-lg text-white flex items-center justify-center"
-            disabled={payments.length === 0}
-          >
-            <Download className="w-5 h-5 mr-2" />
-            Export CSV
-          </motion.button>
+          <div className="flex gap-2">
+            <motion.button
+              onClick={exportPaymentsToCSV}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="px-4 py-2 bg-blue-600 rounded-lg text-white flex items-center justify-center"
+              disabled={payments.length === 0 || exporting}
+            >
+              <Download className="w-5 h-5 mr-2" />
+              Export Payments
+            </motion.button>
+
+            <motion.button
+              onClick={exportTeamsToCSV}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="px-4 py-2 bg-purple-600 rounded-lg text-white flex items-center justify-center"
+              disabled={teams.length === 0 || exporting}
+            >
+              <Download className="w-5 h-5 mr-2" />
+              Export Teams
+            </motion.button>
+          </div>
         </div>
 
-        {/* Payment Status Chart */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="lg:col-span-2 bg-gradient-to-br from-purple-900/30 to-blue-900/30 backdrop-blur-xl rounded-xl p-6"
-          >
-            <h3 className="text-xl font-semibold text-white mb-4">Payment Status</h3>
-            <div className="flex items-center justify-center h-64">
-              <div className="flex flex-col items-center">
-                <div className="relative w-48 h-48">
-                  {/* Circular progress chart */}
-                  <svg className="w-full h-full" viewBox="0 0 100 100">
-                    {/* Background circle */}
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      stroke="#1f2937"
-                      strokeWidth="10"
-                    />
-                    
-                    {/* Paid segment */}
-                    {(paidTeams > 0 || pendingTeams > 0) && (
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="none"
-                        stroke="#10b981"
-                        strokeWidth="10"
-                        strokeDasharray={`${(paidTeams / (paidTeams + pendingTeams)) * 251.2} 251.2`}
-                        strokeDashoffset="0"
-                        transform="rotate(-90 50 50)"
-                      />
-                    )}
-                  </svg>
-                  
-                  {/* Center text */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-3xl font-bold text-white">
-                      {Math.round(paidTeams / (paidTeams + pendingTeams || 1) * 100)}%
-                    </span>
-                    <span className="text-sm text-gray-400">Paid</span>
-                  </div>
-                </div>
-                
-                <div className="flex justify-center mt-4 space-x-6">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                    <span className="text-gray-300">Paid ({paidTeams})</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
-                    <span className="text-gray-300">Pending ({pendingTeams})</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+        {/* Teams Table */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 backdrop-blur-xl rounded-xl p-6 mb-8"
+        >
+          <h3 className="text-xl font-semibold text-white mb-4">Teams</h3>
           
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 backdrop-blur-xl rounded-xl p-6"
-          >
-            <h3 className="text-xl font-semibold text-white mb-4">Quick Actions</h3>
-            <div className="space-y-4">
-              <button
-                onClick={exportPaymentsToCSV}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg text-white flex items-center justify-center"
-              >
-                <Download className="w-5 h-5 mr-2" />
-                Export Payment Data
-              </button>
-              
-              <button
-                onClick={() => window.print()}
-                className="w-full py-3 bg-gradient-to-r from-purple-600 to-violet-600 rounded-lg text-white flex items-center justify-center"
-              >
-                <PieChart className="w-5 h-5 mr-2" />
-                Generate Report
-              </button>
-              
-              <div className="bg-black/30 rounded-lg p-4">
-                <h4 className="text-lg font-semibold text-white mb-2">Payment Summary</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-300">Total Teams:</span>
-                    <span className="text-white">{teams.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-300">Paid Teams:</span>
-                    <span className="text-green-400">{paidTeams}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-300">Pending Teams:</span>
-                    <span className="text-yellow-400">{pendingTeams}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-gray-700">
-                    <span className="text-gray-300">Total Revenue:</span>
-                    <span className="text-green-400">₹{totalRevenue.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
             </div>
-          </motion.div>
-        </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-purple-500/20">
+                    <th className="text-left py-3 px-4 text-gray-300">Team Name</th>
+                    <th className="text-left py-3 px-4 text-gray-300">Registration ID</th>
+                    <th className="text-left py-3 px-4 text-gray-300">Members</th>
+                    <th className="text-left py-3 px-4 text-gray-300">Status</th>
+                    <th className="text-left py-3 px-4 text-gray-300">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teams.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-8 text-gray-400">
+                        No teams found.
+                      </td>
+                    </tr>
+                  ) : (
+                    teams.map((team, index) => (
+                      <tr 
+                        key={team.id} 
+                        className={`border-b border-purple-500/10 ${index % 2 === 0 ? 'bg-purple-900/10' : ''}`}
+                      >
+                        <td className="py-3 px-4 text-white">{team.teamName}</td>
+                        <td className="py-3 px-4 text-gray-300 font-mono text-sm">
+                          {team.registrationId}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="space-y-1">
+                            {team.members?.map((member: any, idx: number) => (
+                              <div key={idx} className="text-sm text-gray-300">
+                                {member.name} ({member.email})
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            team.paymentStatus === 'paid' 
+                              ? 'bg-green-500/20 text-green-400' 
+                              : 'bg-yellow-500/20 text-yellow-400'
+                          }`}>
+                            {team.paymentStatus || 'pending'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {team.paymentStatus !== 'paid' && (
+                            <motion.button
+                              onClick={() => markTeamAsPaid(team.id)}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              className="px-3 py-1 bg-green-600 rounded-lg text-white text-sm flex items-center"
+                              disabled={loading}
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Mark as Paid
+                            </motion.button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
 
         {/* Payments Table */}
         <motion.div
